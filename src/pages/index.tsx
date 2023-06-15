@@ -1,4 +1,4 @@
-import { SignOutButton } from "@clerk/clerk-react";
+import { SignInButton } from "@clerk/clerk-react";
 import { useUser } from "@clerk/nextjs";
 import { type NextPage } from "next";
 import Head from "next/head";
@@ -7,73 +7,102 @@ import type { RouterOutputs } from "~/utils/api";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import Image from "next/image";
+import Loader from "~/components/loader";
 
 dayjs.extend(relativeTime);
 
-const Home: NextPage = () => {
-  const user = useUser();
+const Feed = () => {
+  const { data, isLoading: isPostsLoading } = api.post.getAll.useQuery();
 
-  const { data, isLoading, error } = api.post.getAll.useQuery();
-
-  if (isLoading) return <span>Loading...</span>;
-
-  if (error) return <span>Something went wrong...</span>;
-
-  const CreatePostWizard = () => {
-    const { user } = useUser();
-
-    if (!user) return null;
-
+  if (isPostsLoading)
     return (
-      <>
-        <div className="flex h-full w-full items-center gap-2">
-          <Image
-            className="h-14 w-14 rounded-full"
-            src={user.profileImageUrl}
-            alt="My profile Image"
-            width={56}
-            height={56}
-            priority
-          />
-          <input
-            placeholder="Share your thoughts..."
-            className="grow bg-transparent outline-none"
-            name="post"
-          />
-        </div>
-      </>
+      <div className="grid min-h-screen place-items-center">
+        <Loader size={100} />
+      </div>
     );
-  };
 
-  type postWithUser = RouterOutputs["post"]["getAll"][number];
-  const PostView = (props: postWithUser) => {
-    const { post, author } = props;
+  if (!data) return <div>Something went wrong...</div>;
+
+  return (
+    <div className="flex-column flex">
+      {data.map((post) => (
+        <PostView {...post} key={post.post.id} />
+      ))}
+    </div>
+  );
+};
+
+const CreatePostWizard = () => {
+  const { user, isLoaded: isUserLoaded } = useUser();
+
+  if (!isUserLoaded)
     return (
-      <div
-        className="flex w-full gap-2 border-b border-slate-400 p-4 "
-        key={post.id}
-      >
+      <div className="grid place-items-center">
+        Fetching user data...
+        <Loader size={16} />
+      </div>
+    );
+
+  if (!user)
+    return (
+      <div className="grid place-items-center">Something went wrong...</div>
+    );
+
+  return (
+    <>
+      <div className="flex h-full w-full items-center gap-2">
         <Image
           className="h-14 w-14 rounded-full"
-          src={author.profileImageUrl}
-          alt={`@${author.userName}'s profile image`}
+          src={user.profileImageUrl}
+          alt="My profile Image"
           width={56}
           height={56}
           priority
         />
-        <div className="flex grow flex-col">
-          <p className="text-slate-500">
-            @{author.userName}
-            {" · "}
-            <span className="opacity-50">
-              {dayjs(post.createdAt).fromNow()}
-            </span>
-          </p>
-          <p>{post.content}</p>
-        </div>
+        <input
+          placeholder="Share your thoughts..."
+          className="grow bg-transparent outline-none"
+          name="post"
+        />
       </div>
-    );
-  };
+    </>
+  );
+};
+
+type postWithUser = RouterOutputs["post"]["getAll"][number];
+const PostView = (props: postWithUser) => {
+  const { post, author } = props;
+  return (
+    <div
+      className="flex w-full gap-2 border-b border-slate-400 p-4 "
+      key={post.id}
+    >
+      <Image
+        className="h-14 w-14 rounded-full"
+        src={author.profileImageUrl}
+        alt={`@${author.userName}'s profile image`}
+        width={56}
+        height={56}
+        priority
+      />
+      <div className="flex grow flex-col">
+        <p className="text-slate-500">
+          @{author.userName}
+          {" · "}
+          <span className="opacity-50">{dayjs(post.createdAt).fromNow()}</span>
+        </p>
+        <p>{post.content}</p>
+      </div>
+    </div>
+  );
+};
+
+const Home: NextPage = () => {
+  const { isSignedIn } = useUser();
+
+  // start fetching posts asap
+  api.post.getAll.useQuery();
+
   return (
     <>
       <Head>
@@ -84,14 +113,10 @@ const Home: NextPage = () => {
       <main className="flex justify-center px-1 md:px-0">
         <div className="min-h-screen w-full max-w-3xl border-x border-slate-400">
           <div className="border-b border-slate-400 p-4">
-            {!!user.isSignedIn && <SignOutButton className="mb-2" />}
-            <CreatePostWizard />
+            {isSignedIn && <CreatePostWizard />}
+            {!isSignedIn && <SignInButton />}
           </div>
-          <div className="flex-column flex">
-            {data.map((post) => (
-              <PostView {...post} key={post.post.id} />
-            ))}
-          </div>
+          <Feed />
         </div>
       </main>
     </>
